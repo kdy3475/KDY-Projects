@@ -1,0 +1,455 @@
+/*
+ * Clock.c
+ *
+ * Created: 2025-08-22 오전 9:10:04
+ * Author : COMPUTER
+ */ 
+#define F_CPU 14745600UL
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+#include <stdio.h>
+#include <stdint.h>
+
+//============================================================================ 스톱워치/버튼
+typedef enum
+{
+	MODE_CLOCK = 0,
+	MODE_STOPWATCH
+} watch_mode; //시계모드 구조체
+
+volatile watch_mode g_mode = MODE_CLOCK;
+
+volatile uint8_t stopwatch_running = 0;		//1:실행상태 0:정지상태
+volatile uint16_t stopwatch_ms = 0;			//0~999
+volatile uint8_t stopwatch_sec = 0;			//0~59
+volatile uint8_t stopwatch_min = 0;			//0~99
+
+// 버튼 디바운싱
+#define btn_num
+volatile uint8_t btn_status = 0xFF;			//누르지 않은 상태
+volatile uint8_t btn_last_status = 0xFF;
+volatile uint8_t btn_press = 0x00;			//스캔에서 버튼 눌림 인식 (Edge)
+
+uint8_t read_buttons(void)
+{
+	return PING;	//버튼 누름:0 누르지 않음:1 (풀업)
+}
+
+void buttons_poll(void)	//1~10ms 간격으로 호출
+{
+	uint8_t current = read_buttons();
+	
+	//디바운싱 (동일값 유지시 상태변경 확정)
+	static uint8_t stable_cnt = 0;
+	if (current == btn_status)
+	{
+		stable_cnt = 0;
+	}
+	else
+	{
+		if (++stable_cnt >= 2)	//약 2ms 유지 기준
+		{
+			btn_last_status = btn_status;
+			btn_status = current;
+			stable_cnt = 0;
+			
+			//Falling edge 를 기준으로 입력 처리
+			uint8_t changed = (uint8_t)(btn_last_status ^ btn_status);
+			uint8_t falling_edge = (uint8_t)(changed & (~btn_status));
+			btn_press |= falling_edge;	//새로눌린 버튼 기록
+		}
+	}
+}
+
+void handle_buttons(void) {
+	uint8_t p = btn_press;
+	if (!p) return;
+	
+	btn_press = 0;					// 처리 후 클리어
+
+	if (p & (1<<0))			// PG0핀: 시계 모드
+	{								
+		g_mode = MODE_CLOCK;
+	}
+	if (p & (1<<1))			// PG1핀: stopwatch 모드
+	{
+		g_mode = MODE_STOPWATCH;
+	}
+
+	if (g_mode == MODE_STOPWATCH) {	// stopwatch 모드 진입 후 버튼 동작 정의
+		if (p & (1<<2)) {			// PG2: Start/Stop 토글
+			stopwatch_running = !stopwatch_running;
+		}
+		if (p & (1<<3)) {			 // PG3: Reset (정지 상태에서만 동작)
+			if (!stopwatch_running) {
+				stopwatch_ms = 0;
+				stopwatch_sec = 0;
+				stopwatch_min = 0;
+			}
+		}
+	}
+}
+
+void init_clock(void)	//전원 인가 시 시계 모드로 시작
+{
+	g_mode = MODE_CLOCK;
+}
+
+//============================================================================ 시간 계산부
+
+// 전역 시간 변수
+volatile uint16_t g_ms = 0;		//ms
+volatile uint8_t  g_sec = 0;	//sec
+volatile uint8_t  g_min = 0;	//min
+volatile uint8_t  g_hour = 0;	//hour
+
+// DP 점등을 위한 변수
+volatile uint8_t g_dp_blink = 0;	// DP 토글용 변수 (0:끔 1:켬)
+volatile uint16_t g_dp_counter = 0;	//0.5초마다 점등되는 DP를 카운트하기 위한 변수 (ms 카운트에 방해가 되지 않도록 DP용 카운터를 분리)
+
+static void timer2_init_1ms(void)
+{
+	//내부 클럭 사용 (14.745600)
+	ASSR = 0;
+	
+	// CTC 모드
+	TCCR2 = (1 << WGM21) | (1 << CS22);	//WGM21=1, WGM20=0 ==> CTC모드, 256분주
+	
+	// 비교값 설정 (약 1ms)
+	OCR2 = 57;	// 14745600/256 = 57600
+	
+	//TCNT2 = 112;
+
+	// 비교일치 인터럽트 세팅
+	TIMSK |= (1 << OCIE2);
+}
+
+ISR(TIMER2_COMP_vect)			// 1ms마다 비교일치 인터럽트 호출
+{
+	g_ms++;
+	g_dp_counter++;
+	
+	// 스톱워치 기능
+	if (stopwatch_running)
+	{
+		stopwatch_ms++;
+		if (stopwatch_ms >= 1000)	//ms 가 1000에 도달하면 0으로 초기화
+		{
+			stopwatch_ms = 0;
+			stopwatch_sec++;		//ms 가 1000에 도달하면 sec 증가
+			if (stopwatch_sec >= 60)//sec 가 60에 도달하면 0으로 초기화
+			{
+				stopwatch_sec = 0;
+				if (stopwatch_min < 99) //min 을 2자리까지 표시하도록 제한 (99분까지 카운팅)
+				{
+					stopwatch_min++; // sec 가 60에 도달하면 min 증가	
+				}
+				
+			}
+		}
+	}
+	
+	//DP 점등
+	if (g_dp_counter >= 500)	//0.5초 까지
+	{
+		g_dp_counter = 0;		//0.5초에 도달하면 0으로 초기화
+		g_dp_blink = !g_dp_blink;	//0.5초마다 DP 점등 (토글링)
+	}
+	
+	//시간 계산
+	if (g_ms >= 1000)		//1000밀리초에 도달하면 1초 증가
+	{				
+		g_ms = 0;
+		g_sec++;
+		if (g_sec >= 60)	//60초에 도달하면 1분 증가
+		{			
+			g_sec = 0;
+			g_min++;
+			if (g_min >= 60)//60분에 도달하면 1시간 증가
+			{		
+				g_min = 0;
+				g_hour++;
+				if (g_hour >= 24)
+				{
+					g_hour = 0;		//24시에 도달하면 0시로 초기화
+				}
+			}
+		}
+	}
+}
+
+void clock_set(uint8_t hour, uint8_t min, uint8_t sec) // 초기 시간 설정 함수
+{
+	cli();
+	g_hour = hour % 24;
+	g_min  = min % 60;
+	g_sec  = sec % 60;
+	g_ms   = 0;
+	sei();
+}
+
+int get_time_HHMM(void) // HHMM 정수 반환 (12시30분 → 1230)
+{
+	uint8_t h, m;
+	cli();      // 원자적 읽기
+	h = g_hour;
+	m = g_min;
+	sei();
+	return (int)(h * 100 + m);
+}
+
+//============================================================================ FND
+unsigned char font[18] = {
+	0x3F,	//0
+	0x06,	//1
+	0x5B,	//2
+	0x4F,	//3
+	0x66,	//4
+	0x6D,	//5
+	0x7D,	//6
+	0x07,	//7
+	0x7F,	//8
+	0x67,	//9
+	0x77,	//A
+	0x7C,	//B
+	0x39,	//C
+	0x5E,	//D
+	0x79,	//E
+	0x71,	//F
+	0x08,	//G
+	0x80	//.
+};
+
+void Segment(int);	// segment 함수 선언
+
+void Segment(int N)
+{
+	DDRA = 0xFF;	// FND 데이터
+	PORTA = 0x00;
+	DDRC = 0x0F;	// FND 자리 선택(하위 4비트 출력)
+	PORTC = 0x00;
+	
+	int i;
+	unsigned char N1000, N100, N10, N1;	//배열에서 폰트를 가져다 쓰는 방식으로 구현
+	int Buff;
+
+	N1000 = N /1000;	//Segment 에서 사용하는 천의 자리를 추출
+	Buff = N %1000;
+
+	N100 = Buff /100;	//Segment 에서 사용하는 백의 자리를 추출
+	Buff = Buff %100;
+
+	N10 = Buff /10;		//Segment 에서 사용하는 십의 자리를 추출
+	
+	N1 = Buff %10;		//Segment 에서 사용하는 일의 자리를 추출
+
+	for (i=0; i<30; i++)
+	{
+		PORTC = 0x0E;	//왼쪽 첫번째 세그먼트 ON
+		PORTA = font[N1000];
+		_delay_ms(1);
+
+		PORTC = 0x0D;	//왼쪽 두번째 세그먼트 ON
+		if(g_dp_blink)
+		{
+			PORTA = font[N100] | 0x80;	// DP도 함께 ON (폰트 배열에는 0x08이 없기 때문에...)
+		}
+		else
+		{
+			PORTA = font[N100];	// DP를 제외하고 ON
+		}
+		_delay_ms(1);
+		
+		PORTC = 0x0B;	//왼쪽 세번째 세그먼트 ON
+		PORTA = font[N10];
+		_delay_ms(1);
+
+		PORTC = 0x07;	//왼쪽 네번째 세그먼트 ON
+		PORTA = font[N1];
+		_delay_ms(1);
+	}
+}
+
+//============================================================================ LED
+void led()	//1분을 기준으로 시간의 흐름에 따라 LED를 순차적으로 켜지게 함
+{
+	DDRF = 0xFF;
+	uint8_t c_sec = g_sec;
+	
+	if(c_sec == 0)			PORTF = 0x00;
+	else if(c_sec <= 7)		PORTF = 0x80;
+	else if(c_sec <= 15)	PORTF = 0xC0;
+	else if(c_sec <= 22)	PORTF = 0xE0;
+	else if(c_sec <= 30)	PORTF = 0xF0;
+	else if(c_sec <= 37)	PORTF = 0xF8;
+	else if(c_sec <= 45)	PORTF = 0xFC;
+	else if(c_sec <= 52)	PORTF = 0xFE;
+	else if(c_sec <= 60)	PORTF = 0xFF;
+}
+
+//============================================================================ USART
+void Init_USART(void);
+void Serial_Send(unsigned char);
+
+#define RX_FIXED_LEN 4				//입력받을 숫자 수
+volatile uint8_t rx_idx = 0;		//배열에 대입할 인덱스 번호 0으로 초기화
+volatile char rx_buf[RX_FIXED_LEN];	//4자리 버퍼로 고정
+volatile uint8_t rx_ready = 0;		//4자리 수신 완료 플래그
+
+unsigned char data ;
+
+void Init_USART(void)
+{
+	DDRE = 0xfe;	
+	UCSR0A = 0x00;
+	UCSR0B = 0x98;	//RXCIEN, TXE, RXE 활성화
+	UCSR0C = 0x06;	// 비동기모드, Parity 없음, 1 Stop Bit
+	UBRR0H = 0x00;
+	UBRR0L = 0x07;	//보드율 115200bps
+}
+
+void USART0_str(unsigned char* str)	//문자 배열을 하나씩 Serial_send 함수에 넘겨준다
+{
+	while(*str)
+	{
+		Serial_Send(*str++);
+	}
+}
+
+void Serial_Send(unsigned char c) //송신부
+{
+	while(1) {
+		if( (UCSR0A & 0x20 )!=0 ) break;
+	}
+	UDR0 = c;
+	UCSR0A = UCSR0A | 0x20;
+}
+
+ISR(USART0_RX_vect)
+{
+	unsigned char c = UDR0;		//1바이트 수신
+	UCSR0A |= 0x80;				//RXC 플래그 클리어
+
+	if (rx_ready) // 이전 데이터가 아직 처리되지 않았다면 초기화
+	{
+		rx_idx = 0;
+		rx_ready = 0;
+	}
+
+	if (c >= '0' && c <= '9')	//숫자만 필터링
+	{
+		if (rx_idx < RX_FIXED_LEN)
+		{
+			rx_buf[rx_idx++] = (char)c; //rx_buf 배열에 한자리씩 대입
+			if (rx_idx == RX_FIXED_LEN)
+			{
+				rx_ready = 1; // 4자리가 완성되면 1 세팅
+			}
+		}
+	}
+	else
+	{
+		rx_idx = 0; // 숫자 외 문자는 입력 초기화 (노이즈/개행 등)
+	}
+}
+
+static int ascii_to_int(const char s[4]) //ASCII 문자를 정수형으로 형변환
+{
+	return (s[0]-'0')*1000 + (s[1]-'0')*100 + (s[2]-'0')*10 + (s[3]-'0'); //입력받은 4자리수를 1000,100,10,1 의 자리수에 맞게 배열에 저장.
+}
+
+void process_input_time(void) //입력받은 4자리 숫자를 각 자리수에 맞게 파싱 및 에러 제어.
+{
+	if (!rx_ready) return;
+
+	char local[4]; //임시로 4자리 숫자를 저장할 배열
+	cli();
+	for (uint8_t i=0; i<4; i++) local[i] = rx_buf[i];
+	rx_ready = 0;
+	rx_idx = 0;
+	sei();
+
+	int val = ascii_to_int(local);
+	uint8_t hh = (uint8_t)(val / 100);
+	uint8_t mm = (uint8_t)(val % 100);
+
+	if (hh < 24 && mm < 60)
+	{
+		clock_set(hh, mm, 0);
+		unsigned char ok[] = "[OK]: time set\r\n";
+		USART0_str(ok);
+	}
+		else
+		{
+			unsigned char err[] = "[ERR]: use HHMM format! (0000~2359)\r\n";
+			USART0_str(err);
+		}
+}
+
+void USART0_print_time(void) //현재시간을 1분마다 주기적으로 USART 통신으로 반환
+{
+	char buf[32];
+	uint8_t h, m;
+
+	cli();
+	h = g_hour;
+	m = g_min;
+	sei();
+	snprintf(buf, sizeof(buf), "Current time is %02u:%02u\r\n", h, m); // 12:30 형태로 2자리 0채움
+	USART0_str(buf);
+}
+
+int main(void)
+{
+	//메모용
+		//DDRA = 0xFF;	// FND 데이터
+		//PORTA = 0x00;
+		//DDRC = 0x0F;	// FND 자리 선택(하위 4비트 출력)
+		//PORTC = 0x00;
+		//DDRD = 0xF0;	//상위니블 출력, 하위니블 입력	
+		//DDRE = 0xfe;	//USART
+		//DDRF = 0xFF;	//LED
+
+	DDRB  = 0x00;     // 버튼입력
+	PORTB = 0xFF;     // 내부 풀업 ON
+	
+//============================================== 시계(main)
+	timer2_init_1ms();		//타이머 초기화
+	clock_set(00, 00, 00);	//초기 시간 설정
+
+//============================================== USART(main)
+	Init_USART();		//USART 초기화
+	sei();
+	unsigned char set_time_message1[] = "Set time value with (HHMM)\r\n";	//시간설정 안내문1
+		USART0_str(set_time_message1);
+		_delay_ms(50);
+	unsigned char set_time_message2[] = "[TIP]: 12:30 -> 1230\r\n";			//시간 설정 안내문2
+		USART0_str(set_time_message2);
+		_delay_ms(50);
+		
+	static uint8_t prev_min = 255;	
+
+	while (1)
+	{	
+		int display;
+		if (g_mode == MODE_CLOCK)	
+		{
+			display = get_time_HHMM();	//시계 모드
+			if (g_min != prev_min)
+			{
+				prev_min = g_min;
+				USART0_print_time();
+			}
+		}
+		else
+		{
+			display = (int)(stopwatch_min*100 + stopwatch_sec);	//stopwatch 모드
+		}
+		buttons_poll();
+		handle_buttons();
+		Segment(display);
+		led();
+		process_input_time();
+	}
+}
