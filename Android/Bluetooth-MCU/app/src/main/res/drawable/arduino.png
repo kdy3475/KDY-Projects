@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+
+<svg
+   width="800px"
+   height="800px"
+   viewBox="0 0 72 72"
+   id="emoji"
+   version="1.1"
+   sodipodi:docname="arduino.svg"
+   inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs7" />
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.71329397"
+     inkscape:cx="167.53261"
+     inkscape:cy="403.05963"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="color" />
+  <g
+     id="color">
+    <polygon
+       fill="#5C9E31"
+       stroke="none"
+       points="8,56 63,56 63,51 67,46.9042 67,28.0005 63,24 63,16 8,16"
+       id="polygon1"
+       style="fill:#8080ff;fill-opacity:1" />
+    <polyline
+       fill="#5C9E31"
+       stroke="none"
+       points="63,56 63,51 67,46.9042 67,28.0005 63,24 63,16 56.1671,16"
+       id="polyline1"
+       style="fill:#9e9eff;fill-opacity:1" />
+    <path
+       id="polygon2"
+       style="fill:#4242ff;fill-opacity:1"
+       d="M 7.9999805 15.999961 L 7.9999805 22.000078 L 5.9999414 22.000078 L 5.9999414 31.000078 L 7.9999805 31.000078 L 7.9999805 56.000039 L 31.333008 56.000039 L 56.167031 15.999961 L 7.9999805 15.999961 z " />
+    <rect
+       x="29"
+       y="46"
+       width="28"
+       height="4"
+       fill="#B1CC33"
+       stroke="none"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       stroke-miterlimit="10"
+       stroke-width="2"
+       id="rect3"
+       style="fill:#9db82e;fill-opacity:1" />
+    <rect
+       x="24"
+       y="22"
+       width="33"
+       height="4"
+       fill="#B1CC33"
+       stroke="none"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       stroke-miterlimit="10"
+       stroke-width="2"
+       id="rect4"
+       style="fill:#9db82e;fill-opacity:1" />
+  </g>
+  <g
+     id="hair" />
+  <g
+     id="skin" />
+  <g
+     id="skin-shadow" />
+  <g
+     id="line">
+    <polyline
+       fill="none"
+       stroke="#000000"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       stroke-miterlimit="10"
+       stroke-width="2"
+       points="8,22 8,16 63,16 63,24 67,28.0005 67,46.9042 63,51 63,56 8,56 8,31"
+       id="polyline4" />
+    <rect
+       x="29"
+       y="46"
+       width="28"
+       height="4"
+       fill="none"
+       stroke="#000000"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       stroke-miterlimit="10"
+       stroke-width="2"
+       id="rect5" />
+    <rect
+       x="24"
+       y="22"
+       width="33"
+       height="4"
+       fill="none"
+       stroke="#000000"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       stroke-miterlimit="10"
+       stroke-width="2"
+       id="rect6" />
+    <polyline
+       fill="none"
+       stroke="#000000"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       stroke-miterlimit="10"
+       stroke-width="2"
+       points="18,30 18,22 5,22 5,31 11.1252,31"
+       id="polyline6" />
+    <polyline
+       fill="none"
+       stroke="#000000"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       stroke-miterlimit="10"
+       stroke-width="2"
+       points="14,50 18,50 18,46 14,46"
+       id="polyline7" />
+    <path
+       fill="none"
+       stroke="#000000"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       stroke-miterlimit="10"
+       stroke-width="2"
+       d="M8,22"
+       id="path7" />
+  </g>
+</svg>
